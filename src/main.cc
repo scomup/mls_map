@@ -1,6 +1,5 @@
 
 
-#include "MLSMap.h"
 #include <chrono>
 #include <thread>
 #include <pcl_conversions/pcl_conversions.h>
@@ -16,7 +15,6 @@
 #include <pcl/io/pcd_io.h>
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
-
 
 #include "viewer/viewer.h"
 
@@ -51,9 +49,24 @@ void cloud_cb(const sensor_msgs::PointCloud2ConstPtr &input)
 int main(int argc, char **argv)
 {
 
+    std::vector<double> data{
+        1,
+        1,
+        1,
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2};
+    auto kmean = auto_cluster(data,0.01);
+    exit(0);
+    
     ros::init(argc, argv, "test_traversability");
     ros::NodeHandle nh;
     // Create a ROS subscriber for the input point cloud
+    
     ros::Subscriber sub = nh.subscribe("/map3d", 1, cloud_cb);
 
     std::cout << "wait map3d topic\n";
@@ -63,33 +76,51 @@ int main(int argc, char **argv)
         ros::spinOnce();
     }
 
+    /*
+    pcl::PointCloud<pcl::PointXYZ>::Ptr local_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointXYZ p0(0., 0., 0.11);
+    pcl::PointXYZ p1(0., 0., 0.12);
+    pcl::PointXYZ p2(0., 0., 0.13);
+    pcl::PointXYZ p3(0., 0., 1.12);
+    pcl::PointXYZ p4(0., 0., 1.11);
+    pcl::PointXYZ p5(0., 0., 1.12);
+
+    local_cloud->push_back(p0);
+    local_cloud->push_back(p1);
+    local_cloud->push_back(p2);
+    local_cloud->push_back(p3);
+    local_cloud->push_back(p4);
+    local_cloud->push_back(p5);
+    cloud = local_cloud;
+    */
     Eigen::AlignedBox2d known_cells_box;
     for (auto &point : *cloud)
     {
         known_cells_box.extend(Eigen::Vector2d(point.x, point.y));
     }
 
-    const double grid_size = 0.05;
+    const double grid_size = 0.1;
     Eigen::Vector2d res(grid_size, grid_size);
 
-    double width = std::floor((known_cells_box.sizes().x() + 10) / grid_size);
-    double height = std::floor((known_cells_box.sizes().y() + 10) / grid_size);
+    double width = std::floor((known_cells_box.sizes().x()) / grid_size + 10);
+    double height = std::floor((known_cells_box.sizes().y()) / grid_size + 10);
 
     Vector2ui numCells(width, height);
-
     MLSConfig mls_config;
-    typedef MLSMap<MLSConfig::KALMAN> MLSMap;
-    mls_config.updateModel = MLSConfig::KALMAN;
+    typedef MLSMap<MLSConfig::SLOPE> MLSMap;
+    mls_config.updateModel = MLSConfig::SLOPE;
     MLSMap mls(numCells, res, mls_config);
 
-    mls.getLocalFrame().translation() << 0.5 * mls.getSize(), 0;
+    mls.getLocalFrame().translation() << -known_cells_box.min(), 0;
 
-    std::cout << "create mls map...\n";
+    mls.CreateMapByPointCloud(*cloud);
+    /*
     for (auto &point : *cloud)
     {
-        //printf("%f %f %f\n", point.x, point.y, point.z);
         mls.mergePoint(Eigen::Vector3d(point.x, point.y, point.z));
     }
+    */
+
     std::cout << "OK!\n";
 
     

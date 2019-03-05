@@ -47,7 +47,7 @@ class Viewer
     // Main thread function. Draw points, keyframes, the current camera pose and the last processed
     // frame. Drawing is refreshed according to the camera fps. We use Pangolin.
     void Run();
-    void SetMap(MLSMap<MLSConfig::KALMAN> *MLSMap){mls_ = MLSMap;};
+    void SetMap(MLSMap<MLSConfig::SLOPE> *MLSMap){mls_ = MLSMap;};
 
     void SetFinish();
     bool isFinished() { return finish_; };
@@ -65,7 +65,7 @@ class Viewer
 
     bool finish_;
 
-    MLSMap<MLSConfig::KALMAN> *mls_;
+    MLSMap<MLSConfig::SLOPE> *mls_;
 
     std::mutex mutex_frame_;
 };

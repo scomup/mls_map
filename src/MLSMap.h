@@ -30,7 +30,7 @@
 #include <vector>
 #include <set>
 #include <exception>
-
+#include <unordered_map>
 #include <Eigen/Geometry>
 
 #include <boost/scoped_ptr.hpp>
@@ -49,10 +49,20 @@
 #include <pcl/point_types.h>
 
 #include "base/TransformWithCovariance.hpp"
+#include "JenksBreaks.h"
 
 
 namespace maps { namespace grid
 {
+
+static size_t hash2(const Index& idx)
+{
+    size_t seed = 0;
+    boost::hash_combine(seed, idx.x());
+    boost::hash_combine(seed, idx.y());
+    return seed;
+}
+
     typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
     template<enum MLSConfig::update_model  SurfaceType>
@@ -182,6 +192,50 @@ namespace maps { namespace grid
         {
             // TODO implement
             throw std::runtime_error("mergeMLS is not yet implemented!");
+        }
+
+        void CreateMapByPointCloud(const PointCloud &cloud)
+        {
+            
+            std::unordered_map<Index, std::vector<double>, std::function<size_t(const Index&)>> grid_cells(0,hash2);
+
+            for (auto &p : cloud)
+            {
+                Eigen::Vector3d pos_diff;
+                Index idx;
+                Eigen::Vector3d pos(p.x,p.y,p.z);
+                if (!Base::toGrid(pos, idx, pos_diff))
+                    throw std::runtime_error((boost::format("Point %1% is outside of the grid! Can't add to grid.") % pos.transpose()).str());
+                grid_cells[idx].push_back(p.z);
+                
+            }
+            for (auto &g : grid_cells)
+            {
+                auto& idx = g.first;
+                auto& cell = g.second;
+                CellType &list = Base::at(idx);
+                auto ktree = auto_cluster(cell,0.003);
+
+                for (auto &part : ktree)
+                {
+                    //Patch new_patch = new Patch(Eigen::Vector3f(0, 0, part[0]), 0.01); 
+                    //Patch new_patch = Patch(Eigen::Vector3f(0, 0, part[0]), 1); 
+                    //mergePoint(Eigen::Vector3d(0,0,part[0]), double measurement_variance = 0.01)
+                    //list.insert(new_patch);
+                    list.insert( Patch(Eigen::Vector3f(0,0,part[0]),0.01));
+                    for (int i = 1; i < part.size(); i++)
+                    {
+                        Patch& top_patch = *list.rbegin();
+                        merge(top_patch, Patch(Eigen::Vector3f(0, 0, part[i]), 0.01));
+                    }
+                }
+
+                //auto ktree = auto_cluster(cell);
+
+                //mergePatch(idx, Patch(pos_diff.cast<float>(), measurement_variance));
+                
+            }
+
         }
 
         void mergePointCloud(const PointCloud& pc, const Transform3d& pc2mls, double measurement_variance = 0.01)

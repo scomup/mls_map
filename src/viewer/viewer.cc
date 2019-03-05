@@ -97,10 +97,12 @@ void Viewer::Run()
                     double top = it->getTop();
                     double height = top - it->getBottom();
 
-                    if(it->isVertical())
-                    glColorHSV(0);
-                    else
-                    glColorHSV(100);
+                    //if(it->isVertical())
+                    //glColorHSV(0);
+                    //else
+                    glColorHSV( std::abs(top*100));
+                    //printf("%f\n", top);
+
         
 
                     Vector3d pos;
