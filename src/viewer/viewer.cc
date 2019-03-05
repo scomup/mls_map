@@ -105,7 +105,7 @@ void Viewer::Run()
 
         
 
-                    Vector3d pos;
+                    Vector3d pos(0,0,0);
                     mls_->fromGrid(maps::grid::Index(x, y), pos);
                     DrawBox2(pos.x(), pos.y(), top, height);
 

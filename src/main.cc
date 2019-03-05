@@ -48,7 +48,7 @@ void cloud_cb(const sensor_msgs::PointCloud2ConstPtr &input)
 
 int main(int argc, char **argv)
 {
-
+/*
     std::vector<double> data{
         1,
         1,
@@ -59,10 +59,15 @@ int main(int argc, char **argv)
         2,
         2,
         2,
-        2};
+        2,
+        2.1,
+        3.1,
+        3.2,
+        3.3
+        };
     auto kmean = auto_cluster(data,0.01);
     exit(0);
-    
+    */
     ros::init(argc, argv, "test_traversability");
     ros::NodeHandle nh;
     // Create a ROS subscriber for the input point cloud

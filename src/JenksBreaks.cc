@@ -12,26 +12,25 @@ double inline max_variance(const std::valarray<double> &data_list, const std::va
 {
     double max_var = 0;
 
-    int begin = 0;
-    int level = 0;
-    for (int level = 0; level < (int)kclass.size(); level++)
+    int base = 0;
+    for (int level = 0; level < (int)kclass.size()-1; level++)
     {
-        int base = 0;
         for (int i = base; i < (int)data_list.size(); i++)
         {
-            if (kclass[level] <= data_list[i] && data_list[i] <= kclass[level + 1])
+            if (kclass[level] <= data_list[i] && data_list[i] <= kclass[level + 1] && i != (int)data_list.size() -1)
             {
                 continue;
             }
-            else{
-                std::valarray<double> part = data_list[std::slice(base, i, 1)];
-                max_var = std::max(max_var, variance(part));
-                separated_data.push_back(part);
-                break;
-            }
+            if (i == (int)data_list.size() - 1)
+                i++;
+            std::valarray<double> part = data_list[std::slice(base, i-base, 1)];
+            max_var = std::max(max_var, variance(part));
+            separated_data.push_back(part);
+            base = i;
+            break;
+            
         }
     }
-
     return max_var;
 }
 
@@ -82,7 +81,7 @@ std::valarray<double> get_jenks_breaks(std::valarray<double> &data_list, int num
         }
     }
     int k = data_list.size();
-    std::valarray<double> kclass(number_class + 1);
+    std::valarray<double> kclass(data_list[0], number_class + 1);
 
     for (int i = 0; i < number_class + 1; i++)
         kclass[0] = data_list[0];
@@ -91,8 +90,12 @@ std::valarray<double> get_jenks_breaks(std::valarray<double> &data_list, int num
     while (count_num >= 2)
     {
         int idx = (int)((mat1[k][count_num]) - 2);
+        if (idx < 0)
+            break;
         kclass[count_num - 1] = data_list[idx];
         k = int((mat1[k][count_num] - 1));
+        if (k < 0)
+            break;
         count_num -= 1;
     }
 
@@ -108,12 +111,12 @@ std::vector<std::valarray<double>> auto_cluster(std::vector<double> &data_list, 
     std::vector<std::valarray<double>> separated_data;
 
     
-    for (int i = 1; i <= n; i++)
+    for (int i = 1; i < n; i++)
     {
         separated_data.clear();
         auto k_tree = get_jenks_breaks(data_copy, i);
-        
         double var = max_variance(data_copy, k_tree, separated_data);
+        /*
         printf("level: %d, %lf\n", i, var);
         for (auto s : separated_data)
         {
@@ -123,18 +126,16 @@ std::vector<std::valarray<double>> auto_cluster(std::vector<double> &data_list, 
                 std::cout << m << std::endl;
             }
         }
-        return separated_data;
-
-        if(var<max_var){
-            return separated_data;
+        */
+        if(var<max_var)
+            return separated_data;    
+        
+        if(i >= 4)
+            break;
             
-        }
-        if(i >= 4){
-            return separated_data;
-            
-        }
+        
     }
-    //separated_data.push_back(data_copy);
     separated_data.clear();
+    separated_data.push_back(data_copy);
     return separated_data;
 }
