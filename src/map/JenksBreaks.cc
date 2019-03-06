@@ -130,12 +130,15 @@ std::vector<std::valarray<double>> auto_cluster(std::vector<double> &data_list, 
         if(var<max_var)
             return separated_data;    
         
-        if(i >= 4)
-            break;
-            
+        if(i >= 6){
+            separated_data.clear();
+            separated_data.push_back(data_copy);
+            return separated_data;
+        }
+        //    
         
     }
     separated_data.clear();
-    separated_data.push_back(data_copy);
+    //separated_data.push_back(data_copy);
     return separated_data;
 }

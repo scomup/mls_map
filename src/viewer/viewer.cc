@@ -82,6 +82,7 @@ void Viewer::Run()
         d_cam.Activate(s_cam);
         pangolin::glDrawAxis(1);
 
+
         glColor3f(0.0f, 1.0f, 0.0f);
         glBegin(GL_QUADS);
         //const GridMap<SPListST> &mls = *this;
@@ -100,15 +101,13 @@ void Viewer::Run()
                     //if(it->isVertical())
                     //glColorHSV(0);
                     //else
-                    glColorHSV( std::abs(top*100));
+                    glColorHSV(std::abs(top * 100));
                     //printf("%f\n", top);
 
-        
-
-                    Vector3d pos(0,0,0);
+                    Vector3d pos(0, 0, 0);
                     mls_->fromGrid(maps::grid::Index(x, y), pos);
-                    DrawBox2(pos.x(), pos.y(), top, height);
-
+                    //DrawBox2(pos.x(), pos.y(), top, 0.01, 0.01);
+                    DrawBox2(pos.x(), pos.y(), top, height, 0.05);
 
                     //pangolin::glDrawLine(xx, yy, zz, xx2, yy2, zz2);
                     //cout <<"Mean:"<<it->getMean() <<std::endl;
@@ -119,9 +118,30 @@ void Viewer::Run()
                     //std::cout <<"Max:"<<it->getMax() <<std::endl;
                     //std::cout <<"getNormal:"<<it->getNormal() <<std::endl;
                 }
+                // auto graph = graph_->graph()[0];
             }
         }
         glEnd();
+        
+
+        for (auto &m : graph_->graph())
+        {
+            const auto &edge = m.second;
+            
+            for (auto &e : edge)
+            {
+                uint v = e.second;
+                uint u = m.first;
+                auto uu = graph_->positions()[u];
+                auto vv = graph_->positions()[v];
+                pangolin::glColorHSV(std::abs((uu.z() + vv.z()) * 50));
+                glBegin(GL_LINES);
+                glVertex3f(uu.x(), uu.y(), uu.z());
+                glVertex3f(vv.x(), vv.y(), vv.z());
+                glEnd();
+            }
+        }
+
 
         pangolin::FinishFrame();
     }

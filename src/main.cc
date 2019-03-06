@@ -15,12 +15,123 @@
 #include <pcl/io/pcd_io.h>
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Pose.h>
+#include <nav_msgs/Path.h>
+
+#include "src/graph/dijkstra_graph.h"
+#include "src/graph/astar_graph.h"
 
 #include "viewer/viewer.h"
 
 using namespace maps::grid;
+using namespace GraphNavigation::Graph;
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+MLSMap<MLSConfig::SLOPE>* mls_;
+DijkstraGraph<Eigen::Vector3d, float>* graph_;
+Eigen::Vector3d start_(-1,-1,-1);
+Eigen::Vector3d goal_(-1,-1,-1);
+ros::Publisher g_plan_pub_;
+  void goalCB(const geometry_msgs::PoseStamped::ConstPtr& msg){
+    double x = msg->pose.position.x;
+    double y = msg->pose.position.y;
+    double z = msg->pose.position.z;
+    Eigen::Vector3d pos(x,y,z);
+    Index idx;
+    Eigen::Vector3d pos_in_cell;
+
+    if (!mls_->toGrid(pos, idx, pos_in_cell))
+        return;
+    auto &list = mls_->at(idx.x(), idx.y());
+    double min_diff_top = 0;
+    double min_diff  = 100;
+    if(list.size() == 0)
+        return;
+    for (auto it = list.begin(); it != list.end(); it++)
+    {
+        double top = it->getTop();
+        double diff = std::abs(top - z);
+        if( min_diff >  diff){
+            min_diff_top = top;
+            min_diff = diff;
+        }
+    }
+    mls_->fromGrid(maps::grid::Index(x, y), pos);
+    goal_ = Eigen::Vector3d(pos.x(), pos.y(), min_diff_top);
+    std::cout<<"get goal point!"<<std::endl;
+    std::cout<<goal_<<std::endl;
+
+    if (goal_.x() == -1)
+    {
+        std::cout << "we need a goal!" << std::endl;
+        return;
+    }
+    if (start_.x() == -1)
+    {
+        std::cout << "we need a start!" << std::endl;
+        return;
+    }
+    std::vector<Eigen::Vector3d> path;
+    nav_msgs::Path path_msg;
+
+    graph_->FindPath(start_, goal_, path);
+
+    path_msg.poses.resize(path.size());
+    path_msg.header.frame_id = "map";
+    path_msg.header.stamp = ros::Time::now();
+
+
+    //graph_->FindPath(start_idx, goal_idx, std::vector<uint> path);
+    int i = 0;
+    for (Eigen::Vector3d p : path)
+    {
+        geometry_msgs::PoseStamped pose;
+        pose.pose.position.x = p.x();
+        pose.pose.position.y = p.y();
+        pose.pose.position.z = p.z();
+        path_msg.poses[i++] = pose;
+    }
+    g_plan_pub_.publish(path_msg);
+    
+    
+
+
+  }
+
+void initialPoseReceived(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
+{
+    double x = msg->pose.pose.position.x;
+    double y = msg->pose.pose.position.y;
+    double z = msg->pose.pose.position.z;
+    Eigen::Vector3d pos(x,y,z);
+    Index idx;
+    Eigen::Vector3d pos_in_cell;
+
+    if (!mls_->toGrid(pos, idx, pos_in_cell))
+        return;
+    auto &list = mls_->at(idx.x(), idx.y());
+    double min_diff_top = 0;
+    double min_diff  = 100;
+    if(list.size() == 0)
+        return;
+    for (auto it = list.begin(); it != list.end(); it++)
+    {
+        
+        double top = it->getTop();
+        printf("top %f\n",top);
+        double diff = std::abs(top - z);
+        if( min_diff >  diff){
+            min_diff_top = top;
+            min_diff = diff;
+        }
+    }
+    mls_->fromGrid(maps::grid::Index(x, y), pos);
+    start_ = Eigen::Vector3d(pos.x(), pos.y(), min_diff_top);
+    std::cout<<"get start point!"<<std::endl;
+    std::cout<<start_<<std::endl;
+}
 
 void cloud_cb(const sensor_msgs::PointCloud2ConstPtr &input)
 {
@@ -48,7 +159,7 @@ void cloud_cb(const sensor_msgs::PointCloud2ConstPtr &input)
 
 int main(int argc, char **argv)
 {
-/*
+    /*
     std::vector<double> data{
         1,
         1,
@@ -71,9 +182,11 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "test_traversability");
     ros::NodeHandle nh;
     // Create a ROS subscriber for the input point cloud
-    
-    ros::Subscriber sub = nh.subscribe("/map3d", 1, cloud_cb);
 
+    ros::Subscriber sub = nh.subscribe("map3d", 1, cloud_cb);
+    ros::Subscriber initial_pose_sub = nh.subscribe("initialpose", 2, initialPoseReceived);
+    ros::Subscriber goal_sub_ = nh.subscribe("/move_base_simple/goal", 1, goalCB);
+    g_plan_pub_ = nh.advertise<nav_msgs::Path>("global_plan", 1);
     std::cout << "wait map3d topic\n";
     while (cloud == nullptr && ros::ok())
     {
@@ -98,38 +211,35 @@ int main(int argc, char **argv)
     local_cloud->push_back(p5);
     cloud = local_cloud;
     */
+    //Make map
     Eigen::AlignedBox2d known_cells_box;
     for (auto &point : *cloud)
     {
         known_cells_box.extend(Eigen::Vector2d(point.x, point.y));
     }
-
     const double grid_size = 0.1;
     Eigen::Vector2d res(grid_size, grid_size);
-
     double width = std::floor((known_cells_box.sizes().x()) / grid_size + 10);
     double height = std::floor((known_cells_box.sizes().y()) / grid_size + 10);
-
     Vector2ui numCells(width, height);
     MLSConfig mls_config;
     typedef MLSMap<MLSConfig::SLOPE> MLSMap;
     mls_config.updateModel = MLSConfig::SLOPE;
     MLSMap mls(numCells, res, mls_config);
-
     mls.getLocalFrame().translation() << -known_cells_box.min(), 0;
-
     mls.CreateMapByPointCloud(*cloud);
-    /*
-    for (auto &point : *cloud)
-    {
-        mls.mergePoint(Eigen::Vector3d(point.x, point.y, point.z));
-    }
-    */
+    mls_ = &mls;
 
-    std::cout << "OK!\n";
+    std::cout << "Create mls map OK !\n";
 
-    
-    //const GridMap<SPListST> &mls = *this;
+    DijkstraGraph<Eigen::Vector3d, float> graph(
+        [](Eigen::Vector3d state) {
+             size_t seed = 0;
+            boost::hash_combine(seed, state.x());
+            boost::hash_combine(seed, state.y());
+            boost::hash_combine(seed, state.z());
+            return seed; });
+
     Vector2ui num_cell = mls.getNumCells();
     for (size_t x = 0; x < num_cell.x(); x++)
     {
@@ -137,29 +247,62 @@ int main(int argc, char **argv)
         {
             auto &list = mls.at(x, y);
 
-            Vector2d pos(0.00, 0.00);
-            // Calculate the position of the cell center.
-            pos = (maps::grid::Index(x, y).cast<double>() + maps::grid::Vector2d(0.5, 0.5)).array() * mls.getResolution().array();
-            //geode.setPosition(pos.x(), pos.y());
             for (auto it = list.begin(); it != list.end(); it++)
             {
-                //cout <<"Mean:"<<it->getMean() <<std::endl;
-                //cout <<"Variance:"<<it->getVariance() <<std::endl;
-                //cout <<"Height:"<<it->getHeight() <<std::endl;
-                //std::cout<<"------------------------\n";
-                //std::cout <<"Min:"<<it->getMin() <<std::endl;
-                //std::cout <<"Max:"<<it->getMax() <<std::endl;
-                //std::cout <<"getNormal:"<<it->getNormal() <<std::endl;
-
+                double top = it->getTop();
+                Vector3d pos(0, 0, 0);
+                mls.fromGrid(maps::grid::Index(x, y), pos);
+                graph.AddNode(Eigen::Vector3d(pos.x(), pos.y(), top));
             }
         }
     }
+    std::cout << "Add nodes to navi graph OK!\n";
+
+
+    for (auto &m : graph.graph())
+    {
+        const auto &pos = graph.positions()[m.first];
+        Index idx;
+        Eigen::Vector3d pos_in_cell;
+
+        if (!mls.toGrid(pos, idx, pos_in_cell))
+            continue;
+
+        for (int x = idx.x() - 1; x <= idx.x() + 1; x++)
+        {
+            for (int y = idx.y() - 1; y <= idx.y() + 1; y++)
+            {
+                if (x == idx.x() && y == idx.y())
+                    continue;
+                if (!mls.inGrid(Index(x, y)))
+                    continue;
+                auto &list = mls.at(x, y);
+                for (auto it = list.begin(); it != list.end(); it++)
+                {
+                    Vector3d near_pos(0, 0, 0);
+                    if (!mls.fromGrid(maps::grid::Index(x, y), near_pos))
+                        continue;
+                    double top = it->getTop();
+
+                    if (std::abs(top - pos.z()) < 0.1)
+                    {
+                        graph.AddEdge(pos, Eigen::Vector3d(near_pos.x(), near_pos.y(), top));
+                    }
+
+                }
+            }
+        }
+    }
+    graph_ = &graph;
+    std::cout << "Add edges to navi graph OK!\n";
 
     auto viewer = new Viewer();
     auto viewer_thread = std::thread(&Viewer::Run, viewer);
 
     viewer->SetMap(&mls);
-    viewer_thread.join();
+    viewer->SetGraph(&graph);
+    ros::spin();
+    //viewer_thread.join();
 
     return 0;
 }

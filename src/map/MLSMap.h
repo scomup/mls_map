@@ -214,7 +214,7 @@ static size_t hash2(const Index& idx)
                 auto& idx = g.first;
                 auto& cell = g.second;
                 CellType &list = Base::at(idx);
-                auto ktree = auto_cluster(cell,0.01);
+                auto ktree = auto_cluster(cell,0.001);
 
                 for (auto &part : ktree)
                 {
@@ -224,10 +224,23 @@ static size_t hash2(const Index& idx)
                     //list.insert(new_patch);
                     //if(part.size()<5)
                     //    continue;
-                    list.insert( Patch(Eigen::Vector3f(0,0,part[0]),0.01));
+
+                    if (list.size() == 0)
+                    {
+                        list.insert(Patch(Eigen::Vector3f(0, 0, part[0]), 0.01));
+                    }
+                    else
+                    {
+                        Patch &top_patch = *list.rbegin();
+                        double top = top_patch.getTop();
+                        if ((part[0] - top) > 0.3)
+                            list.insert(Patch(Eigen::Vector3f(0, 0, part[0]), 0.01));
+                        else
+                            merge(top_patch, Patch(Eigen::Vector3f(0, 0, part[0]), 0.01));
+                    }
+                    Patch& top_patch = *list.rbegin();
                     for (int i = 1; i < (int)part.size(); i++)
                     {
-                        Patch& top_patch = *list.rbegin();
                         merge(top_patch, Patch(Eigen::Vector3f(0, 0, part[i]), 0.01));
                     }
                 }

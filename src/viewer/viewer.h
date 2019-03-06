@@ -32,9 +32,11 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/surface/gp3.h>
 
-#include "../MLSMap.h"
+#include "src/map/MLSMap.h"
+#include "src/graph/navi_graph.h"
 
 using namespace maps::grid;
+using namespace GraphNavigation::Graph;
 class Viewer
 {
 
@@ -48,9 +50,10 @@ class Viewer
     // frame. Drawing is refreshed according to the camera fps. We use Pangolin.
     void Run();
     void SetMap(MLSMap<MLSConfig::SLOPE> *MLSMap){mls_ = MLSMap;};
-
+    void SetGraph(NaviGraph<Eigen::Vector3d, float>* graph){graph_ = graph;};
     void SetFinish();
     bool isFinished() { return finish_; };
+
 
   private:
     double t_;
@@ -66,6 +69,7 @@ class Viewer
     bool finish_;
 
     MLSMap<MLSConfig::SLOPE> *mls_;
+    NaviGraph<Eigen::Vector3d, float>* graph_;
 
     std::mutex mutex_frame_;
 };
