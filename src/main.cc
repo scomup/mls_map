@@ -58,7 +58,8 @@ ros::Publisher g_plan_pub_;
             min_diff = diff;
         }
     }
-    mls_->fromGrid(maps::grid::Index(x, y), pos);
+    
+    mls_->fromGrid(idx, pos);
     goal_ = Eigen::Vector3d(pos.x(), pos.y(), min_diff_top);
     std::cout<<"get goal point!"<<std::endl;
     std::cout<<goal_<<std::endl;
@@ -127,10 +128,11 @@ void initialPoseReceived(const geometry_msgs::PoseWithCovarianceStampedConstPtr&
             min_diff = diff;
         }
     }
-    mls_->fromGrid(maps::grid::Index(x, y), pos);
+    mls_->fromGrid(idx, pos);
     start_ = Eigen::Vector3d(pos.x(), pos.y(), min_diff_top);
     std::cout<<"get start point!"<<std::endl;
     std::cout<<start_<<std::endl;
+
 }
 
 void cloud_cb(const sensor_msgs::PointCloud2ConstPtr &input)
